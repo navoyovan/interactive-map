@@ -1,0 +1,168 @@
+<?php
+// app/Filament/Resources/PostResource.php
+namespace App\Filament\Resources;
+
+use App\Models\Post;
+use Filament\Forms;
+use Filament\Forms\Form;
+use Filament\Resources\Resource;
+use Filament\Tables;
+use Filament\Tables\Table;
+use Filament\Tables\Filters\SelectFilter;
+use App\Filament\Resources\PostResource\Pages;
+
+class PostResource extends Resource
+{
+    protected static ?string $model = Post::class;
+
+    protected static ?string $navigationIcon = 'heroicon-o-photo';
+
+    // PENGATURAN DARI KODE LAMA UNTUK NAVIGASI
+    protected static ?string $navigationGroup = 'Moderation';
+    protected static ?int $navigationSort = 2;
+
+    public static function form(Form $form): Form
+    {
+        return $form
+            ->schema([
+                Forms\Components\Section::make()
+                    ->schema([
+                        Forms\Components\TextInput::make('title')
+                            ->required()
+                            ->maxLength(255),
+
+                        Forms\Components\Select::make('user_id')
+                            ->relationship('user', 'name')
+                            ->searchable()
+                            ->preload()
+                            ->required(),
+
+                        Forms\Components\Select::make('pin_id')
+                            ->relationship('pin', 'label')
+                            ->searchable()
+                            ->preload()
+                            ->required(),
+
+                        Forms\Components\FileUpload::make('image')
+                            ->directory('post-images')
+                            ->image()
+                            ->imageEditor(),
+
+                        Forms\Components\RichEditor::make('body')
+                            ->columnSpanFull(),
+
+                        Forms\Components\Toggle::make('moderated')
+                            ->required(),
+
+                        Forms\Components\TextInput::make('likes_count')
+                            ->label('Likes')
+                            ->numeric()
+                            ->default(0),
+                    ])
+                    ->columns(2),
+            ]);
+    }
+
+    public static function table(Table $table): Table
+    {
+        return $table
+            ->columns([
+                Tables\Columns\ImageColumn::make('image')
+                    ->disk('public'),
+                    // ->circular(),
+
+                Tables\Columns\TextColumn::make('title')
+                    ->searchable()
+                    ->sortable()
+                    ->limit(40),
+
+                Tables\Columns\TextColumn::make('user.name')
+                    ->label('Author')
+                    ->searchable()
+                    ->sortable(),
+                
+                Tables\Columns\TextColumn::make('pin.label')
+                    ->label('Pin Location')
+                    ->searchable()
+                    ->sortable(),
+
+                Tables\Columns\IconColumn::make('moderated')
+                    ->boolean()
+                    ->trueIcon('heroicon-o-check-circle')
+                    ->falseIcon('heroicon-o-x-circle')
+                    ->trueColor('success')
+                    ->falseColor('danger'),
+                
+                Tables\Columns\TextColumn::make('likes_count')
+                    ->label('Likes')
+                    ->sortable(),
+
+                Tables\Columns\TextColumn::make('created_at')
+                    ->dateTime()
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+            ])
+            ->filters([
+                Tables\Filters\TernaryFilter::make('moderated')
+                    ->label('Moderation Status')
+                    ->boolean()
+                    ->trueLabel('Approved')
+                    ->falseLabel('Pending')
+                    ->native(false),
+            ])
+            ->actions([
+                Tables\Actions\EditAction::make(),
+                // TOMBOL APPROVE/REJECT DARI KODE LAMA
+                Tables\Actions\Action::make('approve')
+                    ->label('Approve')
+                    ->icon('heroicon-o-check')
+                    ->color('success')
+                    ->action(fn (Post $record) => $record->update(['moderated' => true]))
+                    ->visible(fn (Post $record) => !$record->moderated),
+                Tables\Actions\Action::make('reject')
+                    ->label('Revoke')
+                    ->icon('heroicon-o-x-mark')
+                    ->color('danger')
+                    ->action(fn (Post $record) => $record->update(['moderated' => false]))
+                    ->visible(fn (Post $record) => $record->moderated),
+            ])
+            ->bulkActions([
+                Tables\Actions\BulkActionGroup::make([
+                    Tables\Actions\DeleteBulkAction::make(),
+                    // AKSI MASSAL DARI KODE LAMA
+                    Tables\Actions\BulkAction::make('approve')
+                        ->label('Approve Selected')
+                        ->icon('heroicon-o-check')
+                        ->color('success')
+                        ->action(fn ($records) => $records->each->update(['moderated' => true])),
+                    Tables\Actions\BulkAction::make('reject')
+                        ->label('Revoke Selected')
+                        ->icon('heroicon-o-x-mark')
+                        ->color('danger')
+                        ->action(fn ($records) => $records->each->update(['moderated' => false])),
+                ]),
+            ]);
+    }
+
+    public static function getRelations(): array
+    {
+        return [
+            //
+        ];
+    }
+
+    public static function getPages(): array
+    {
+        return [
+            'index' => Pages\ListPosts::route('/'),
+            'create' => Pages\CreatePost::route('/create'),
+            'edit' => Pages\EditPost::route('/{record}/edit'),
+        ];
+    }
+
+    // FUNGSI BADGE DARI KODE LAMA
+    public static function getNavigationBadge(): ?string
+    {
+        return static::getModel()::where('moderated', false)->count();
+    }
+}
